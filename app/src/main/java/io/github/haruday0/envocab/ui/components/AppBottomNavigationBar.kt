@@ -17,7 +17,7 @@ import io.github.haruday0.envocab.model.Screen
 fun AppBottomNavigationBar(
     currentScreen: Screen,
     onSelectScreen: (Screen) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     NavigationBar(modifier = modifier) {
         @Composable
@@ -25,7 +25,7 @@ fun AppBottomNavigationBar(
             screen: Screen,
             label: String,
             selectedIcon: Int,
-            unselectedIcon: Int
+            unselectedIcon: Int,
         ) {
             NavigationBarItem(
                 selected = currentScreen == screen,
@@ -33,12 +33,12 @@ fun AppBottomNavigationBar(
                 icon = {
                     Icon(
                         painter = painterResource(
-                            if (currentScreen == screen) selectedIcon else unselectedIcon
+                            if (currentScreen == screen) selectedIcon else unselectedIcon,
                         ),
-                        contentDescription = label
+                        contentDescription = label,
                     )
                 },
-                label = { Text(label) }
+                label = { Text(label) },
             )
         }
 

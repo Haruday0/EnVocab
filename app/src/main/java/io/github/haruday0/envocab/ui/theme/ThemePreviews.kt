@@ -11,13 +11,13 @@ import androidx.compose.ui.tooling.preview.Preview
     group = "Theme",
     showBackground = true,
     uiMode = Configuration.UI_MODE_NIGHT_NO,
-    locale = "ja"
+    locale = "ja",
 )
 @Preview(
     name = "Dark Mode",
     group = "Theme",
     showBackground = true,
     uiMode = Configuration.UI_MODE_NIGHT_YES,
-    locale = "ja"
+    locale = "ja",
 )
 annotation class ThemePreviews

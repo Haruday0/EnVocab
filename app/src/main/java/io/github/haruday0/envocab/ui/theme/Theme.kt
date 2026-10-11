@@ -1,6 +1,5 @@
 package io.github.haruday0.envocab.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -31,7 +30,8 @@ private val DarkColorScheme = darkColorScheme(
     onSurfaceVariant = Color(0xFFC4C6D0),
     surfaceContainer = Color(0xFF1D2024),
     surfaceContainerHigh = Color(0xFF282A2F),
-    outline = Color(0xFF8E9099)
+    surfaceContainerHighest = Color(0xFF33353A),
+    outline = Color(0xFF8E9099),
 )
 
 private val LightColorScheme = lightColorScheme(
@@ -53,21 +53,21 @@ private val LightColorScheme = lightColorScheme(
     onSurfaceVariant = Color(0xFF44474F),
     surfaceContainer = Color(0xFFF0F0F7),
     surfaceContainerHigh = Color(0xFFEAEAF1),
-    outline = Color(0xFF74777F)
+    outline = Color(0xFF74777F),
 )
 
 @Composable
 fun EnVocabTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
     val isInspection = LocalInspectionMode.current
 
     // プレビュー環境ではレイアウトレンダラーのダイナミックカラー不具合を防ぐため、カスタム定義のスキームを使用する
     val colorScheme = when {
-        dynamicColor && !isInspection && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+        dynamicColor && !isInspection -> {
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
         darkTheme -> DarkColorScheme
@@ -76,6 +76,7 @@ fun EnVocabTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        content = content
+        typography = AppTypography,
+        content = content,
     )
 }

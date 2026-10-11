@@ -1,6 +1,8 @@
 package io.github.haruday0.envocab.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +12,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -60,13 +64,15 @@ import io.github.haruday0.envocab.ui.components.searchEmptyBadgeShape
 import io.github.haruday0.envocab.ui.theme.EnVocabTheme
 import io.github.haruday0.envocab.ui.theme.ThemePreviews
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 fun SearchScreen(
     items: List<VocabItem>,
-    playingItemKey: String?,
-    onPlayAudio: (Int, String) -> Unit,
+    onPlayAudio: (VocabItem, String) -> Unit,
+    onToggleMastered: (VocabItem, Boolean) -> Unit = { _, _ -> },
     onEditItem: (VocabItem) -> Unit,
     onDeleteItem: (VocabItem) -> Unit,
     onBack: () -> Unit
@@ -102,7 +108,8 @@ fun SearchScreen(
 
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) {
-        delay(80.milliseconds)
+        // Shared axis 画面遷移 (300ms) の完了を待ってからキーボードを開く (公式推奨)
+        delay(320.milliseconds)
         focusRequester.requestFocus()
     }
 
@@ -122,6 +129,11 @@ fun SearchScreen(
         modifier = Modifier.fillMaxSize(),
         containerColor = screenBackgroundColor(),
         topBar = {
+            val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            val isImeVisible = WindowInsets.ime.getBottom(density) > 0
+            val imeInsets = WindowInsets.ime
+
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = screenBackgroundColor(),
@@ -129,8 +141,19 @@ fun SearchScreen(
                 ),
                 navigationIcon = {
                     IconButton(onClick = {
-                        keyboardController?.hide()
-                        onBack()
+                        if (isImeVisible) {
+                            keyboardController?.hide()
+                            coroutineScope.launch {
+                                kotlinx.coroutines.withTimeoutOrNull(500.milliseconds) {
+                                    androidx.compose.runtime.snapshotFlow { 
+                                        imeInsets.getBottom(density) 
+                                    }.first { it == 0 }
+                                }
+                                onBack()
+                            }
+                        } else {
+                            onBack()
+                        }
                     }) {
                         Icon(
                             painter = painterResource(R.drawable.ic_arrow_back),
@@ -186,11 +209,19 @@ fun SearchScreen(
             )
         }
     ) { innerPadding ->
+        val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
         Box(
             modifier = Modifier
                 .padding(innerPadding)
                 .imePadding()
                 .fillMaxSize()
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ) {
+                    focusManager.clearFocus()
+                    keyboardController?.hide()
+                }
         ) {
             when {
                 searchQuery.isNotBlank() && filteredItems.isEmpty() -> {
@@ -240,8 +271,6 @@ fun SearchScreen(
                             item = item,
                             index = index,
                             count = filteredItems.size,
-                            isPlaying = playingItemKey == "${item.no}_en",
-                            onPlayAudio = { onPlayAudio(item.no, "en") },
                             onClick = {
                                 recordSearch(searchQuery)
                                 selectedItemForDetail = item
@@ -356,14 +385,18 @@ fun SearchScreen(
     }
     }
 
+    val currentDetailItem = items.find { it.id == selectedItemForDetail?.id } ?: selectedItemForDetail
+
     VocabItemDetailSheet(
-        item = selectedItemForDetail,
+        item = currentDetailItem,
         onDismiss = { selectedItemForDetail = null },
         onEdit = {
             selectedItemForDetail = null
             onEditItem(it)
         },
-        onDelete = { itemToDelete = it }
+        onDelete = { itemToDelete = it },
+        onToggleMastered = onToggleMastered,
+        onPlayAudio = onPlayAudio
     )
 
     DeleteVocabItemDialog(
@@ -386,7 +419,6 @@ fun SearchScreenPreview() {
                 VocabItem(id = "1", bookId = "1", no = 1, word = "apple", meaning = "[名] りんご"),
                 VocabItem(id = "2", bookId = "1", no = 2, word = "banana", meaning = "[名] バナナ")
             ),
-            playingItemKey = null,
             onPlayAudio = { _, _ -> },
             onEditItem = {},
             onDeleteItem = {},

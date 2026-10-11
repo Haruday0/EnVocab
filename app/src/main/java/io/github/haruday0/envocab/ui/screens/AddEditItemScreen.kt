@@ -1,9 +1,13 @@
 package io.github.haruday0.envocab.ui.screens
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -36,15 +40,17 @@ fun AddEditItemScreen(
     initialItem: VocabItem?,
     activeBookId: String?,
     onBack: () -> Unit,
-    onSave: (VocabItem) -> Unit
+    onSave: (VocabItem) -> Unit,
 ) {
 
     var noStr by remember { mutableStateOf(initialItem?.no?.toString() ?: "") }
-    var partStr by remember { mutableStateOf(initialItem?.part?.toString() ?: "1") }
+    var partStr by remember { mutableStateOf(initialItem?.part?.toString() ?: "") }
     var group by remember { mutableStateOf(initialItem?.group ?: "") }
     var word by remember { mutableStateOf(initialItem?.word ?: "") }
     var meaning by remember { mutableStateOf(initialItem?.meaning ?: "") }
     var note by remember { mutableStateOf(initialItem?.note ?: "") }
+
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
 
     Scaffold(
         containerColor = screenBackgroundColor(),
@@ -52,7 +58,7 @@ fun AddEditItemScreen(
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = screenBackgroundColor(),
-                    scrolledContainerColor = screenBackgroundColor()
+                    scrolledContainerColor = screenBackgroundColor(),
                 ),
                 title = {
                     Text(if (initialItem == null) "単語を追加" else "単語を編集")
@@ -61,7 +67,7 @@ fun AddEditItemScreen(
                     IconButton(onClick = onBack) {
                         Icon(
                             painter = painterResource(R.drawable.ic_arrow_back),
-                            contentDescription = "戻る"
+                            contentDescription = "戻る",
                         )
                     }
                 },
@@ -71,14 +77,14 @@ fun AddEditItemScreen(
                             val no = noStr.toIntOrNull() ?: 0
                             val part = partStr.toIntOrNull() ?: 1
 
-                            if (word.isNotBlank() && activeBookId != null) {
+                            if ((word.isNotBlank()) && (activeBookId != null)) {
                                 val item = initialItem?.copy(
                                     no = no,
                                     part = part,
                                     group = group.trim(),
                                     word = word.trim(),
                                     meaning = meaning.trim(),
-                                    note = note.trim()
+                                    note = note.trim(),
                                 ) ?: VocabItem(
                                     bookId = activeBookId,
                                     no = no,
@@ -86,69 +92,88 @@ fun AddEditItemScreen(
                                     group = group.trim(),
                                     word = word.trim(),
                                     meaning = meaning.trim(),
-                                    note = note.trim()
+                                    note = note.trim(),
                                 )
                                 onSave(item)
                             }
                         },
-                        enabled = word.isNotBlank()
+                        enabled = word.isNotBlank(),
                     ) {
                         Text("保存")
                     }
-                }
+                },
             )
-        }
+        },
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
+                .imePadding()
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ) {
+                    focusManager.clearFocus()
+                }
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            OutlinedTextField(
-                value = noStr,
-                onValueChange = { noStr = it },
-                label = { Text("単語番号 (例: 1)") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
             OutlinedTextField(
                 value = partStr,
                 onValueChange = { partStr = it },
-                label = { Text("Part 番号 (例: 1)") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                label = { Text("Part 番号") },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Next
+                ),
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                singleLine = true,
             )
 
             OutlinedTextField(
                 value = group,
                 onValueChange = { group = it },
-                label = { Text("グループ名 (例: 国・町・外国)") },
+                label = { Text("グルーピング") },
+                keyboardOptions = KeyboardOptions(
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Next
+                ),
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                singleLine = true,
+            )
+
+            OutlinedTextField(
+                value = noStr,
+                onValueChange = { noStr = it },
+                label = { Text("単語番号") },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Next
+                ),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
             )
 
             OutlinedTextField(
                 value = word,
                 onValueChange = { word = it },
-                label = { Text("見出し語 (必須)") },
+                label = { Text("見出語（句）") },
+                keyboardOptions = KeyboardOptions(
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Next
+                ),
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                singleLine = true,
             )
 
             OutlinedTextField(
                 value = meaning,
                 onValueChange = { meaning = it },
-                label = { Text("意味 (例: [形] {外国}の)") },
+                label = { Text("意味 (例: [名] 通り/街)") },
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 90.dp),
-                maxLines = 4
+                maxLines = 4,
             )
 
             OutlinedTextField(
@@ -156,7 +181,7 @@ fun AddEditItemScreen(
                 onValueChange = { note = it },
                 label = { Text("メモ・解説") },
                 modifier = Modifier.fillMaxWidth(),
-                maxLines = 4
+                maxLines = 4,
             )
         }
     }
@@ -170,7 +195,7 @@ fun AddEditItemScreenPreview() {
             initialItem = VocabItem(id = "1", bookId = "1", no = 1, word = "apple", meaning = "[名] りんご"),
             activeBookId = "1",
             onBack = {},
-            onSave = {}
+            onSave = {},
         )
     }
 }

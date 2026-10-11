@@ -1,23 +1,31 @@
 package io.github.haruday0.envocab
 
-import android.media.MediaPlayer
 import android.os.Bundle
+import io.github.haruday0.envocab.audio.rememberVocabAudioPlayer
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import io.github.haruday0.envocab.ui.components.materialFadeThrough
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.material3.Scaffold
-import io.github.haruday0.envocab.ui.components.AppBottomNavigationBar
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -25,14 +33,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.unit.dp
 import io.github.haruday0.envocab.data.DataManager
 import io.github.haruday0.envocab.model.Screen
 import io.github.haruday0.envocab.model.VocabBook
 import io.github.haruday0.envocab.model.VocabItem
-import io.github.haruday0.envocab.ui.components.PredictiveBackContainer
+import io.github.haruday0.envocab.ui.components.AppBottomNavigationBar
+import io.github.haruday0.envocab.ui.components.screenBackgroundColor
 import io.github.haruday0.envocab.ui.screens.AddEditItemScreen
-import io.github.haruday0.envocab.ui.screens.CardSessionScreen
+import io.github.haruday0.envocab.ui.screens.CardPlayScreen
+import io.github.haruday0.envocab.ui.screens.CardSetupScreen
 import io.github.haruday0.envocab.ui.screens.HomeScreen
 import io.github.haruday0.envocab.ui.screens.ListScreen
 import io.github.haruday0.envocab.ui.screens.SearchScreen
@@ -46,7 +59,12 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             EnVocabTheme {
-                MainApp()
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = screenBackgroundColor()
+                ) {
+                    MainApp()
+                }
             }
         }
     }
@@ -56,12 +74,12 @@ class MainActivity : ComponentActivity() {
 fun MainApp() {
     val isPreview = LocalInspectionMode.current
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
 
+    val navController = rememberNavController()
     var currentTab by remember { mutableStateOf(Screen.Home) }
-    var isSearchOpen by remember { mutableStateOf(false) }
-    var isAddEditOpen by remember { mutableStateOf(false) }
-    var addEditOpenedFromSearch by remember { mutableStateOf(false) }
     var editingItem by remember { mutableStateOf<VocabItem?>(null) }
+    var cardSessionItems by remember { mutableStateOf<List<VocabItem>?>(null) }
 
     val books = remember {
         mutableStateListOf<VocabBook>().apply {
@@ -98,215 +116,208 @@ fun MainApp() {
     val activeBook = books.find { it.id == activeBookId }
     val currentItems = allItems.filter { it.bookId == activeBookId }
 
-    val mediaPlayer = if (isPreview) null else remember { MediaPlayer() }
-    var playingItemKey by remember { mutableStateOf<String?>(null) }
+    val audioPlayer = rememberVocabAudioPlayer(
+        activeBook = { activeBook },
+        items = { currentItems }
+    )
 
-    fun stopAudio() {
-        try {
-            if (mediaPlayer?.isPlaying == true) mediaPlayer.stop()
-            mediaPlayer?.reset()
-        } catch (e: Exception) {
-            e.printStackTrace()
+    val density = LocalDensity.current
+    val slidePx = with(density) { 30.dp.roundToPx() }
+    val m3Easing = CubicBezierEasing(0.2f, 0.0f, 0.0f, 1.0f)
+    val enterSpec = tween<IntOffset>(durationMillis = 300, easing = m3Easing)
+    val exitSpec = tween<IntOffset>(durationMillis = 300, easing = m3Easing)
+    val fadeSpec = tween<Float>(durationMillis = 300, easing = m3Easing)
+
+    NavHost(
+        navController = navController,
+        startDestination = "main",
+        enterTransition = {
+            slideInHorizontally(enterSpec) { slidePx } + fadeIn(fadeSpec)
+        },
+        exitTransition = {
+            slideOutHorizontally(exitSpec) { -slidePx } + fadeOut(fadeSpec)
+        },
+        popEnterTransition = {
+            slideInHorizontally(enterSpec) { -slidePx } + fadeIn(fadeSpec)
+        },
+        popExitTransition = {
+            slideOutHorizontally(exitSpec) { slidePx } + fadeOut(fadeSpec)
         }
-        playingItemKey = null
-    }
-
-    fun playAudio(no: Int, lang: String) {
-        if (isPreview || mediaPlayer == null) return
-        val folderUri = activeBook?.audioFolderPath.orEmpty()
-        val audioUri = DataManager.findAudioUri(context, folderUri, no, lang)
-        val key = "${no}_$lang"
-
-        if (playingItemKey == key) {
-            stopAudio()
-            return
-        }
-
-        stopAudio()
-
-        if (audioUri != null) {
-            try {
-                mediaPlayer.reset()
-                mediaPlayer.setDataSource(context, audioUri)
-                mediaPlayer.prepare()
-                mediaPlayer.setOnCompletionListener { playingItemKey = null }
-                mediaPlayer.start()
-                playingItemKey = key
-            } catch (e: Exception) {
-                e.printStackTrace()
-                playingItemKey = null
+    ) {
+        composable("main") {
+            BackHandler(enabled = currentTab != Screen.Home) {
+                currentTab = Screen.Home
             }
-        }
-    }
 
-    DisposableEffect(Unit) {
-        onDispose { mediaPlayer?.release() }
-    }
+            Scaffold(
+                containerColor = screenBackgroundColor(),
+                bottomBar = {
+                    AppBottomNavigationBar(
+                        currentScreen = currentTab,
+                        onSelectScreen = { screen ->
+                            currentTab = screen
+                        }
+                    )
+                }
+            ) { innerPadding ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = innerPadding.calculateBottomPadding())
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() }
+                        ) {
+                            focusManager.clearFocus()
+                        }
+                ) {
+                    AnimatedContent(
+                        targetState = currentTab,
+                        transitionSpec = {
+                            materialFadeThrough()
+                        },
+                        label = "tabTransition"
+                    ) { targetTab ->
+                        when (targetTab) {
+                            Screen.Home -> HomeScreen(
+                                activeBook = activeBook,
+                                currentItems = currentItems,
+                                onStartCard = { currentTab = Screen.Card },
+                                onNavigateToSettings = { currentTab = Screen.Settings }
+                            )
 
-    BackHandler(enabled = currentTab != Screen.Home && !isSearchOpen && !isAddEditOpen) {
-        currentTab = Screen.Home
-    }
+                            Screen.Card -> CardSetupScreen(
+                                activeBook = activeBook,
+                                items = currentItems,
+                                onStartSession = { itemsToPlay ->
+                                    cardSessionItems = itemsToPlay
+                                    navController.navigate("card_play")
+                                },
+                                onNavigateToSettings = { currentTab = Screen.Settings }
+                            )
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Scaffold(
-            bottomBar = {
-                AppBottomNavigationBar(
-                    currentScreen = currentTab,
-                    onSelectScreen = { screen ->
-                        isSearchOpen = false
-                        isAddEditOpen = false
-                        currentTab = screen
-                    }
-                )
-            }
-        ) { innerPadding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = innerPadding.calculateBottomPadding())
-            ) {
-                AnimatedContent(
-                    targetState = currentTab,
-                    transitionSpec = {
-                        fadeIn(animationSpec = tween(durationMillis = 200)) togetherWith
-                                fadeOut(animationSpec = tween(durationMillis = 200))
-                    },
-                    label = "tabTransition"
-                ) { targetTab ->
-                    when (targetTab) {
-                        Screen.Home -> HomeScreen(
-                            activeBook = activeBook,
-                            currentItems = currentItems,
-                            onStartCard = { currentTab = Screen.Card },
-                            onNavigateToSettings = { currentTab = Screen.Settings }
-                        )
+                            Screen.List -> ListScreen(
+                                activeBook = activeBook,
+                                items = currentItems,
+                                onPlayAudio = { item, lang -> audioPlayer.playAudio(item, lang) },
+                                onAddItem = {
+                                    editingItem = null
+                                    navController.navigate("add_edit")
+                                },
+                                onEditItem = { item ->
+                                    editingItem = item
+                                    navController.navigate("add_edit")
+                                },
+                                onDeleteItem = { item ->
+                                    allItems.remove(item)
+                                    DataManager.saveItems(context, allItems)
+                                },
+                                onNavigateToSettings = { currentTab = Screen.Settings },
+                                onNavigateToSearch = { navController.navigate("search") }
+                            )
 
-                        Screen.Card -> CardSessionScreen(
-                            activeBook = activeBook,
-                            items = currentItems,
-                            onPlayAudio = ::playAudio,
-                            onToggleMastered = { item, isMastered ->
-                                val index = allItems.indexOfFirst { it.id == item.id }
-                                if (index != -1) {
-                                    allItems[index] = allItems[index].copy(isMastered = isMastered)
+                            Screen.Settings -> SettingsScreen(
+                                books = books,
+                                activeBookId = activeBookId,
+                                onSelectActiveBook = {
+                                    activeBookId = it
+                                    DataManager.setActiveBookId(context, it)
+                                },
+                                onAddBook = { name ->
+                                    val newBook = VocabBook(name = name)
+                                    books.add(newBook)
+                                    DataManager.saveBooks(context, books)
+                                    if (activeBookId == null) {
+                                        activeBookId = newBook.id
+                                        DataManager.setActiveBookId(context, activeBookId)
+                                    }
+                                },
+                                onUpdateBook = { updatedBook ->
+                                    val index = books.indexOfFirst { it.id == updatedBook.id }
+                                    if (index != -1) {
+                                        books[index] = updatedBook
+                                        DataManager.saveBooks(context, books)
+                                    }
+                                },
+                                onDeleteBook = { book ->
+                                    books.remove(book)
+                                    allItems.removeAll { it.bookId == book.id }
+                                    DataManager.saveBooks(context, books)
+                                    DataManager.saveItems(context, allItems)
+                                    if (activeBookId == book.id) {
+                                        activeBookId = books.firstOrNull()?.id
+                                        DataManager.setActiveBookId(context, activeBookId)
+                                    }
+                                },
+                                onItemsImported = { importedItems ->
+                                    allItems.removeAll { it.bookId == activeBookId }
+                                    allItems.addAll(importedItems)
                                     DataManager.saveItems(context, allItems)
                                 }
-                            },
-                            onNavigateToSettings = { currentTab = Screen.Settings }
-                        )
-
-                        Screen.List -> ListScreen(
-                            activeBook = activeBook,
-                            items = currentItems,
-                            playingItemKey = playingItemKey,
-                            onPlayAudio = ::playAudio,
-                            onAddItem = {
-                                editingItem = null
-                                addEditOpenedFromSearch = false
-                                isAddEditOpen = true
-                            },
-                            onEditItem = { item ->
-                                editingItem = item
-                                addEditOpenedFromSearch = false
-                                isAddEditOpen = true
-                            },
-                            onDeleteItem = { item ->
-                                allItems.remove(item)
-                                DataManager.saveItems(context, allItems)
-                            },
-                            onNavigateToSettings = { currentTab = Screen.Settings },
-                            onNavigateToSearch = { isSearchOpen = true }
-                        )
-
-                        Screen.Settings -> SettingsScreen(
-                            books = books,
-                            activeBookId = activeBookId,
-                            onSelectActiveBook = {
-                                activeBookId = it
-                                DataManager.setActiveBookId(context, it)
-                            },
-                            onAddBook = { name ->
-                                val newBook = VocabBook(name = name)
-                                books.add(newBook)
-                                DataManager.saveBooks(context, books)
-                                if (activeBookId == null) {
-                                    activeBookId = newBook.id
-                                    DataManager.setActiveBookId(context, activeBookId)
-                                }
-                            },
-                            onUpdateBook = { updatedBook ->
-                                val index = books.indexOfFirst { it.id == updatedBook.id }
-                                if (index != -1) {
-                                    books[index] = updatedBook
-                                    DataManager.saveBooks(context, books)
-                                }
-                            },
-                            onDeleteBook = { book ->
-                                books.remove(book)
-                                allItems.removeAll { it.bookId == book.id }
-                                DataManager.saveBooks(context, books)
-                                DataManager.saveItems(context, allItems)
-
-                                if (activeBookId == book.id) {
-                                    activeBookId = books.firstOrNull()?.id
-                                    DataManager.setActiveBookId(context, activeBookId)
-                                }
-                            },
-                            onItemsImported = { importedItems ->
-                                allItems.removeAll { it.bookId == activeBookId }
-                                allItems.addAll(importedItems)
-                                DataManager.saveItems(context, allItems)
-                            }
-                        )
-
-                        else -> Unit
+                            )
+                        }
                     }
                 }
             }
         }
 
-        if (isSearchOpen) {
-            PredictiveBackContainer(
-                onBack = { isSearchOpen = false }
-            ) { requestBack ->
-                SearchScreen(
-                    items = currentItems,
-                    playingItemKey = playingItemKey,
-                    onPlayAudio = ::playAudio,
-                    onEditItem = { item ->
-                        editingItem = item
-                        addEditOpenedFromSearch = true
-                        isAddEditOpen = true
-                    },
-                    onDeleteItem = { item ->
-                        allItems.remove(item)
+        // 検索画面 (M3 Forward and backward: Shared Axis X)
+        composable("search") {
+            SearchScreen(
+                items = currentItems,
+                onPlayAudio = { item, lang -> audioPlayer.playAudio(item, lang) },
+                onToggleMastered = { item, isMastered ->
+                    val index = allItems.indexOfFirst { it.id == item.id }
+                    if (index != -1) {
+                        allItems[index] = allItems[index].copy(isMastered = isMastered)
                         DataManager.saveItems(context, allItems)
-                    },
-                    onBack = requestBack
-                )
-            }
+                    }
+                },
+                onEditItem = { item ->
+                    editingItem = item
+                    navController.navigate("add_edit")
+                },
+                onDeleteItem = { item ->
+                    allItems.remove(item)
+                    DataManager.saveItems(context, allItems)
+                },
+                onBack = { navController.popBackStack() }
+            )
         }
 
-        if (isAddEditOpen) {
-            PredictiveBackContainer(
-                onBack = { isAddEditOpen = false }
-            ) { requestBack ->
-                AddEditItemScreen(
-                    initialItem = editingItem,
-                    activeBookId = activeBookId,
-                    onBack = requestBack,
-                    onSave = { savedItem ->
-                        val index = allItems.indexOfFirst { it.id == savedItem.id }
-                        if (index != -1) {
-                            allItems[index] = savedItem
-                        } else {
-                            allItems.add(savedItem)
-                        }
-                        DataManager.saveItems(context, allItems)
-                        requestBack()
+        // 単語追加・編集画面 (M3 Forward and backward: Shared Axis X)
+        composable("add_edit") {
+            AddEditItemScreen(
+                initialItem = editingItem,
+                activeBookId = activeBookId,
+                onBack = { navController.popBackStack() },
+                onSave = { savedItem ->
+                    val index = allItems.indexOfFirst { it.id == savedItem.id }
+                    if (index != -1) {
+                        allItems[index] = savedItem
+                    } else {
+                        allItems.add(savedItem)
                     }
-                )
-            }
+                    DataManager.saveItems(context, allItems)
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // カード学習画面 (M3 Forward and backward: Shared Axis X)
+        composable("card_play") {
+            CardPlayScreen(
+                sessionItems = cardSessionItems ?: emptyList(),
+                onPlayAudio = { no, lang -> audioPlayer.playAudio(no, lang) },
+                onToggleMastered = { item, isMastered ->
+                    val index = allItems.indexOfFirst { it.id == item.id }
+                    if (index != -1) {
+                        allItems[index] = allItems[index].copy(isMastered = isMastered)
+                        DataManager.saveItems(context, allItems)
+                    }
+                },
+                onDismiss = { navController.popBackStack() }
+            )
         }
     }
 }

@@ -21,11 +21,11 @@ fun screenBackgroundColor(): Color =
 /**
  * カードおよびグルーピングされたリストアイテムの背景色
  * ライトテーマ: surface (Tone 98 / 白)
- * ダークテーマ: surfaceContainer (Tone 12)
+ * ダークテーマ: surfaceContainerHighest (Tone 22)
  */
 @Composable
 fun cardContainerColor(): Color =
-    if (isSystemInDarkTheme()) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surface
+    if (isSystemInDarkTheme()) MaterialTheme.colorScheme.surfaceContainerHighest else MaterialTheme.colorScheme.surface
 
 /**
  * 検索画面の初期表示バッジに使用するスカラップ形状

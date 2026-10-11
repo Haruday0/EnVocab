@@ -32,7 +32,7 @@ import java.io.File
 fun BookCoverThumbnail(
     context: Context,
     fileName: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     if (fileName.isNotBlank()) {
         val file = File(context.filesDir, "covers/$fileName")
@@ -45,7 +45,7 @@ fun BookCoverThumbnail(
                     bitmap = bitmap.asImageBitmap(),
                     contentDescription = null,
                     modifier = modifier.clip(MaterialTheme.shapes.small),
-                    contentScale = ContentScale.Crop
+                    contentScale = ContentScale.Crop,
                 )
                 return
             }
@@ -55,13 +55,13 @@ fun BookCoverThumbnail(
     Surface(
         shape = MaterialTheme.shapes.small,
         color = MaterialTheme.colorScheme.primaryContainer,
-        modifier = modifier
+        modifier = modifier,
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
                 painter = painterResource(R.drawable.ic_book_3),
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
             )
         }
     }
@@ -73,19 +73,19 @@ fun BookCoverThumbnail(
 @Composable
 fun EmptyBookView(
     modifier: Modifier = Modifier,
-    onNavigateToSettings: () -> Unit
+    onNavigateToSettings: () -> Unit,
 ) {
     Box(
         modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
                 "単語帳がありません",
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.outline
+                color = MaterialTheme.colorScheme.outline,
             )
             Spacer(Modifier.height(12.dp))
             Button(onClick = onNavigateToSettings) {

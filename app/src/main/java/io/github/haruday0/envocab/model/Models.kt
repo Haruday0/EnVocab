@@ -7,8 +7,6 @@ enum class Screen {
     Card,
     List,
     Settings,
-    AddEditItem,
-    Search
 }
 
 data class VocabBook(
@@ -16,7 +14,7 @@ data class VocabBook(
     val name: String,
     val audioFolderPath: String = "",
     val coverImageFileName: String = "",
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
 )
 
 data class VocabItem(
@@ -29,5 +27,5 @@ data class VocabItem(
     val meaning: String,
     val translation: String = "",
     val note: String = "",
-    val isMastered: Boolean = false
+    val isMastered: Boolean = false,
 )

@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -56,6 +57,7 @@ import io.github.haruday0.envocab.ui.theme.EnVocabTheme
 import io.github.haruday0.envocab.ui.theme.ThemePreviews
 import java.io.File
 import java.io.FileOutputStream
+import java.time.LocalDate
 
 @Composable
 private fun SettingsCardItem(
@@ -105,6 +107,9 @@ fun SettingsScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var showExamDateDialog by remember { mutableStateOf(false) }
+    var examDate by remember { mutableStateOf(DataManager.getExamDate(context)) }
+    var examName by remember { mutableStateOf(DataManager.getExamName(context)) }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -133,6 +138,18 @@ fun SettingsScreen(
             val count = DataManager.importTextData(context, activeBook.id, text)
             onItemsImported(DataManager.loadItems(context).filter { it.bookId == activeBook.id })
             Toast.makeText(context, "${count}語をインポートしました", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val csvExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/csv")
+    ) { uri: Uri? ->
+        if (uri != null && activeBook != null) {
+            val text = DataManager.exportTextData(context, activeBook.id)
+            context.contentResolver.openOutputStream(uri)?.use { output ->
+                output.write(text.toByteArray(Charsets.UTF_8))
+            }
+            Toast.makeText(context, "エクスポートが完了しました", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -165,7 +182,7 @@ fun SettingsScreen(
     ) { innerPadding ->
         Column(
             modifier = Modifier
-                .padding(innerPadding)
+                .padding(top = innerPadding.calculateTopPadding())
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -205,15 +222,25 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     SettingsCardItem(
-                        headline = "CSVからインポート",
-                        icon = painterResource(R.drawable.ic_add),
+                        headline = "CSVから単語データをインポート",
+                        icon = painterResource(R.drawable.ic_upload),
                         onClick = {
                             csvPickerLauncher.launch(
                                 arrayOf("text/*", "text/comma-separated-values", "*/*")
                             )
                         },
                         index = 0,
-                        count = 5
+                        count = 6
+                    )
+
+                    SettingsCardItem(
+                        headline = "CSVから単語データをエクスポート",
+                        icon = painterResource(R.drawable.ic_download),
+                        onClick = {
+                            csvExportLauncher.launch("${activeBook.name}.csv")
+                        },
+                        index = 1,
+                        count = 6
                     )
 
                     SettingsCardItem(
@@ -221,8 +248,8 @@ fun SettingsScreen(
                         supporting = if (activeBook.audioFolderPath.isBlank()) "未設定" else "設定済み",
                         icon = painterResource(R.drawable.ic_folder),
                         onClick = { folderPicker.launch(null) },
-                        index = 1,
-                        count = 5
+                        index = 2,
+                        count = 6
                     )
 
                     SettingsCardItem(
@@ -233,26 +260,42 @@ fun SettingsScreen(
                                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                             )
                         },
-                        index = 2,
-                        count = 5
+                        index = 3,
+                        count = 6
                     )
 
                     SettingsCardItem(
                         headline = "名前を変更",
                         icon = painterResource(R.drawable.ic_edit),
                         onClick = { showRenameDialog = true },
-                        index = 3,
-                        count = 5
+                        index = 4,
+                        count = 6
                     )
 
                     SettingsCardItem(
                         headline = "この単語帳を削除",
                         icon = painterResource(R.drawable.ic_delete),
                         onClick = { showDeleteConfirmDialog = true },
-                        index = 4,
-                        count = 5
+                        index = 5,
+                        count = 6
                     )
                 }
+            }
+
+            Text("学習目標", style = MaterialTheme.typography.titleMedium)
+
+            Column(
+                verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                SettingsCardItem(
+                    headline = "試験の日程",
+                    supporting = "$examName (${examDate.year}年${examDate.monthValue}月${examDate.dayOfMonth}日)",
+                    icon = painterResource(R.drawable.ic_event),
+                    onClick = { showExamDateDialog = true },
+                    index = 0,
+                    count = 1
+                )
             }
         }
     }
@@ -344,6 +387,9 @@ fun SettingsScreen(
                                     onSelectActiveBook(book.id)
                                     showBookSelectDialog = false
                                 },
+                            colors = ListItemDefaults.colors(
+                                containerColor = Color.Transparent,
+                            ),
                             leadingContent = {
                                 RadioButton(
                                     selected = selected,
@@ -387,6 +433,89 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                    Text("キャンセル")
+                }
+            }
+        )
+    }
+
+    if (showExamDateDialog) {
+        var examNameText by remember { mutableStateOf(examName) }
+        var yearText by remember { mutableStateOf(examDate.year.toString()) }
+        var monthText by remember { mutableStateOf(examDate.monthValue.toString()) }
+        var dayText by remember { mutableStateOf(examDate.dayOfMonth.toString()) }
+
+        AlertDialog(
+            onDismissRequest = { showExamDateDialog = false },
+            title = { Text("試験の日程を設定") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "カウントダウンに表示する試験名と日程を設定します。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    OutlinedTextField(
+                        value = examNameText,
+                        onValueChange = { examNameText = it },
+                        label = { Text("試験名") },
+                        placeholder = { Text(DataManager.DEFAULT_EXAM_NAME) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = yearText,
+                            onValueChange = { if (it.all(Char::isDigit) && it.length <= 4) yearText = it },
+                            label = { Text("年") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1.5f)
+                        )
+                        OutlinedTextField(
+                            value = monthText,
+                            onValueChange = { if (it.all(Char::isDigit) && it.length <= 2) monthText = it },
+                            label = { Text("月") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = dayText,
+                            onValueChange = { if (it.all(Char::isDigit) && it.length <= 2) dayText = it },
+                            label = { Text("日") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val y = yearText.toIntOrNull()
+                        val m = monthText.toIntOrNull()
+                        val d = dayText.toIntOrNull()
+                        if (y != null && m != null && m in 1..12 && d != null) {
+                            runCatching { LocalDate.of(y, m, d) }.getOrNull()?.let { newDate ->
+                                val cleanName = examNameText.trim().ifBlank { DataManager.DEFAULT_EXAM_NAME }
+                                DataManager.setExamName(context, cleanName)
+                                DataManager.setExamDate(context, newDate)
+                                examName = cleanName
+                                examDate = newDate
+                                showExamDateDialog = false
+                            }
+                        }
+                    }
+                ) {
+                    Text("保存")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExamDateDialog = false }) {
                     Text("キャンセル")
                 }
             }

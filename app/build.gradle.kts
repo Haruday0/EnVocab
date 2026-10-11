@@ -21,9 +21,13 @@ android {
 
     buildTypes {
         release {
-            optimization {
-                enable = false
-            }
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "src/main/keepRules/rules.keep"
+            )
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
@@ -36,11 +40,7 @@ android {
 }
 
 dependencies {
-    @Suppress("AvoidDuplicateDependencies")
     implementation(platform(libs.androidx.compose.bom))
-
-    @Suppress("AvoidDuplicateDependencies")
-    androidTestImplementation(platform(libs.androidx.compose.bom))
 
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
@@ -49,6 +49,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.navigation.compose)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
@@ -56,7 +57,7 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
 
     debugImplementation(libs.androidx.compose.ui.test.manifest)
-    debugImplementation(libs.androidx.compose.ui.tooling)
+    implementation(libs.androidx.compose.ui.tooling)
 
     implementation(libs.gson)
     implementation(libs.androidx.compose.material.icons.extended)
