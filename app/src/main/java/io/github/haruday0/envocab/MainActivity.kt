@@ -131,6 +131,7 @@ fun MainApp() {
     NavHost(
         navController = navController,
         startDestination = "main",
+        modifier = Modifier.fillMaxSize(),
         enterTransition = {
             slideInHorizontally(enterSpec) { slidePx } + fadeIn(fadeSpec)
         },
@@ -261,7 +262,7 @@ fun MainApp() {
             }
         }
 
-        // 検索画面 (M3 Forward and backward: Shared Axis X)
+        // 検索画面
         composable("search") {
             SearchScreen(
                 items = currentItems,
@@ -285,7 +286,7 @@ fun MainApp() {
             )
         }
 
-        // 単語追加・編集画面 (M3 Forward and backward: Shared Axis X)
+        // 単語追加・編集画面
         composable("add_edit") {
             AddEditItemScreen(
                 initialItem = editingItem,
