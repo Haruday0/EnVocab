@@ -107,11 +107,13 @@ class AndroidVocabAudioPlayer(
             }
         } else if (tts != null) {
             try {
-                val textToSpeak = if (lang == "ja") item.meaning else item.word
-                val locale = if (lang == "ja") Locale.JAPANESE else Locale.US
-                tts?.language = locale
-                tts?.speak(textToSpeak, TextToSpeech.QUEUE_FLUSH, null, key)
-                playingItemKey = key
+                val textToSpeak = if (lang == "ja") extractJapaneseSpeechText(item.meaning) else item.word
+                if (textToSpeak.isNotBlank()) {
+                    val locale = if (lang == "ja") Locale.JAPANESE else Locale.US
+                    tts?.language = locale
+                    tts?.speak(textToSpeak, TextToSpeech.QUEUE_FLUSH, null, key)
+                    playingItemKey = key
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
                 playingItemKey = null
@@ -170,3 +172,30 @@ fun rememberVocabAudioPlayer(
 
     return player
 }
+
+private val RedTextRegex = Regex("""\{(.*?)\}""")
+private val BracketTagRegex = Regex("""\[.*?\]""")
+private val BracketsRegex = Regex("""[\{\}\[\]]""")
+
+/**
+ * 日本語読み上げ用テキストの抽出。
+ * 中かっこ { ... } で囲まれた赤文字（重要語）のみを抽出し、
+ * 中かっこや品詞タグ [名] などの記号を TTS が読み上げてしまうのを防ぎます。
+ * 赤文字が指定されていない場合は、各種括弧タグを除去したテキストにフォールバックします。
+ */
+internal fun extractJapaneseSpeechText(meaning: String): String {
+    val redMatches = RedTextRegex.findAll(meaning)
+        .map { it.groupValues[1].trim().trim('〜', '～', '~', '・') }
+        .filter { it.isNotEmpty() }
+        .toList()
+
+    if (redMatches.isNotEmpty()) {
+        return redMatches.joinToString("、")
+    }
+
+    return meaning
+        .replace(BracketTagRegex, "")
+        .replace(BracketsRegex, "")
+        .trim(' ', '　', '〜', '～', '~', '・')
+}
+

@@ -155,7 +155,7 @@ fun HomeScreen(
                             Text(
                                 text = if (daysLeft >= 0) "$daysLeft" else "0",
                                 style = MaterialTheme.typography.headlineLarge,
-                                fontWeight = FontWeight.ExtraBold,
+                                fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary,
                             )
                             Text(
