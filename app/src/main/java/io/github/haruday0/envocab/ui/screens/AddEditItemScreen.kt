@@ -44,7 +44,7 @@ fun AddEditItemScreen(
 ) {
 
     var noStr by remember { mutableStateOf(initialItem?.no?.toString() ?: "") }
-    var partStr by remember { mutableStateOf(initialItem?.part?.toString() ?: "") }
+    var partStr by remember { mutableStateOf(initialItem?.part ?: "") }
     var group by remember { mutableStateOf(initialItem?.group ?: "") }
     var word by remember { mutableStateOf(initialItem?.word ?: "") }
     var meaning by remember { mutableStateOf(initialItem?.meaning ?: "") }
@@ -75,7 +75,7 @@ fun AddEditItemScreen(
                     TextButton(
                         onClick = {
                             val no = noStr.toIntOrNull() ?: 0
-                            val part = partStr.toIntOrNull() ?: 1
+                            val part = partStr.trim().ifEmpty { "1" }
 
                             if ((word.isNotBlank()) && (activeBookId != null)) {
                                 val item = initialItem?.copy(
@@ -123,9 +123,8 @@ fun AddEditItemScreen(
             OutlinedTextField(
                 value = partStr,
                 onValueChange = { partStr = it },
-                label = { Text("Part 番号") },
+                label = { Text("Part / セクション (例: 1, +α)") },
                 keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Number,
                     imeAction = androidx.compose.ui.text.input.ImeAction.Next
                 ),
                 modifier = Modifier.fillMaxWidth(),

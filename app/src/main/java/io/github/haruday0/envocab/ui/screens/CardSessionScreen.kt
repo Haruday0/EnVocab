@@ -99,7 +99,18 @@ fun CardSetupScreen(
     val focusManager = LocalFocusManager.current
     val savedConfig = remember { DataManager.loadCardConfig(context) }
 
-    val availableParts = remember(items) { items.map { it.part }.distinct().sorted() }
+    val availableParts = remember(items) {
+        items.map { it.part }.distinct().sortedWith(Comparator { a, b ->
+            val numA = a.toIntOrNull()
+            val numB = b.toIntOrNull()
+            when {
+                numA != null && numB != null -> numA.compareTo(numB)
+                numA != null -> -1
+                numB != null -> 1
+                else -> a.compareTo(b)
+            }
+        })
+    }
     val presetCounts = remember { listOf(10, 20, 30, 50, 100) }
 
     var isCustomCount by remember { mutableStateOf(savedConfig.isCustomCount) }
@@ -212,7 +223,7 @@ fun CardSetupScreen(
                                     selectedParts + part
                                 }
                             },
-                            label = { Text("Part $part") }
+                            label = { Text(if (part.all { it.isDigit() }) "Part $part" else part) }
                         )
                     }
                 }
@@ -799,9 +810,9 @@ fun CardSessionScreenPreview() {
                 CardSetupScreen(
                     activeBook = VocabBook(id = "1", name = "Forget 810"),
                     items = listOf(
-                        VocabItem(id = "1", bookId = "1", no = 1, part = 1, word = "apple", meaning = "[名] りんご", isMastered = false),
-                        VocabItem(id = "2", bookId = "1", no = 2, part = 2, word = "banana", meaning = "[名] バナナ", isMastered = true),
-                        VocabItem(id = "3", bookId = "1", no = 3, part = 3, word = "cherry", meaning = "[名] さくらんぼ", isMastered = false)
+                        VocabItem(id = "1", bookId = "1", no = 1, part = "1", word = "apple", meaning = "[名] りんご", isMastered = false),
+                        VocabItem(id = "2", bookId = "1", no = 2, part = "2", word = "banana", meaning = "[名] バナナ", isMastered = true),
+                        VocabItem(id = "3", bookId = "1", no = 3, part = "3", word = "cherry", meaning = "[名] さくらんぼ", isMastered = false)
                     ),
                     onStartSession = {},
                     onNavigateToSettings = {}

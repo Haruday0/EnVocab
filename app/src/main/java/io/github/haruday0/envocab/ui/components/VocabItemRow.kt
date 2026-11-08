@@ -60,7 +60,14 @@ fun VocabItemRow(
         colors = ListItemDefaults.segmentedColors(
             containerColor = cardContainerColor(),
         ),
-        leadingContent = {
+        leadingContent = null,
+        trailingContent = null,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -82,24 +89,25 @@ fun VocabItemRow(
                     modifier = Modifier.widthIn(min = 24.dp),
                 )
             }
-        },
-        trailingContent = null,
-    ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Text(
-                text = item.word,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            FormattedMeaningText(
-                meaning = item.meaning,
-                isMasked = false,
-                style = MaterialTheme.typography.bodyMedium,
-            )
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = item.word,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                FormattedMeaningText(
+                    meaning = item.meaning,
+                    isMasked = false,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -160,8 +168,9 @@ fun VocabItemDetailSheet(
                 }
             }
 
+            val partLabel = if (item.part.all { it.isDigit() }) "Part ${item.part}" else item.part
             Text(
-                text = "No. ${item.no}  (Part ${item.part}${if (item.group.isNotBlank()) " / ${item.group}" else ""})",
+                text = "No. ${item.no}  ($partLabel${if (item.group.isNotBlank()) " / ${item.group}" else ""})",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.outline,
             )

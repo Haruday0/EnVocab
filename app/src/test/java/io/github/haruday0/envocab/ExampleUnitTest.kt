@@ -18,8 +18,15 @@ class ExampleUnitTest {
 
     @Test
     fun vocabItem_instantiation() {
-        val item = VocabItem(id = "1", bookId = "b1", no = 1, word = "test", meaning = "テスト")
+        val item = VocabItem(id = "1", bookId = "b1", no = 1, part = "1", word = "test", meaning = "テスト")
         assertEquals("test", item.word)
+        assertEquals("1", item.part)
+    }
+
+    @Test
+    fun vocabItem_plusAlphaPart() {
+        val item = VocabItem(id = "2", bookId = "b1", no = 2001, part = "+α", word = "roam", meaning = "[自] {歩き回る}")
+        assertEquals("+α", item.part)
     }
 
     @Test

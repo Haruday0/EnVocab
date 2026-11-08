@@ -158,7 +158,7 @@ object DataManager {
     }
 
     data class CardConfig(
-        val selectedParts: Set<Int> = emptySet(),
+        val selectedParts: Set<String> = emptySet(),
         val onlyUnmastered: Boolean = false,
         val isShuffle: Boolean = false,
         val questionCountText: String = "20",
@@ -169,9 +169,9 @@ object DataManager {
         return runCatching {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             val partsJson = prefs.getString(KEY_CARD_PARTS, null)
-            val parts: Set<Int> = if (partsJson != null) {
-                val type = object : TypeToken<Set<Int>>() {}.type
-                gson.fromJson(partsJson, type) ?: emptySet()
+            val parts: Set<String> = if (partsJson != null) {
+                val type = object : TypeToken<Set<String>>() {}.type
+                gson.fromJson<Set<String>>(partsJson, type) ?: emptySet()
             } else emptySet()
 
             CardConfig(
@@ -200,16 +200,21 @@ object DataManager {
      * CSV またはプレーンテキストから単語データを解析・インポートします。
      */
     fun importTextData(context: Context, bookId: String, content: String): Int {
-        var currentPart = 1
+        var currentPart = "1"
         var currentGroup = ""
         val newItems = mutableListOf<VocabItem>()
 
         content.lines().forEach { line ->
             val trimmed = line.trim()
 
-            if (trimmed.startsWith("# Part") || trimmed.startsWith("#Part")) {
-                currentPart =
-                    trimmed.replace(Regex("[^0-9]"), "").toIntOrNull() ?: currentPart
+            if (trimmed.startsWith("#") && !trimmed.startsWith("##")) {
+                val rawHeader = trimmed.removePrefix("#").trim()
+                currentPart = if (rawHeader.startsWith("Part", ignoreCase = true)) {
+                    val p = rawHeader.removePrefix("Part").removePrefix("part").trim()
+                    p.ifEmpty { rawHeader }
+                } else {
+                    rawHeader
+                }.replace("＋", "+")
             } else if (trimmed.startsWith("##")) {
                 currentGroup = trimmed.removePrefix("##").trim()
             } else if (trimmed.isNotBlank() && !trimmed.startsWith("//")) {
@@ -258,10 +263,22 @@ object DataManager {
     fun exportTextData(context: Context, bookId: String): String {
         val items = loadItems(context).filter { it.bookId == bookId }
         val sb = StringBuilder()
-        val parts = items.groupBy { it.part }.toSortedMap()
+        val parts = items.groupBy { it.part }
+        val sortedPartKeys = parts.keys.sortedWith(Comparator { a, b ->
+            val numA = a.toIntOrNull()
+            val numB = b.toIntOrNull()
+            when {
+                numA != null && numB != null -> numA.compareTo(numB)
+                numA != null -> -1
+                numB != null -> 1
+                else -> a.compareTo(b)
+            }
+        })
 
-        parts.forEach { (part, partItems) ->
-            sb.appendLine("# Part $part")
+        sortedPartKeys.forEach { part ->
+            val partItems = parts[part] ?: return@forEach
+            val partHeader = if (part.all { it.isDigit() }) "# Part $part" else "# $part"
+            sb.appendLine(partHeader)
             val groups = partItems.groupBy { it.group }
             groups.forEach { (group, groupItems) ->
                 if (group.isNotBlank()) {

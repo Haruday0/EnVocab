@@ -222,8 +222,8 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     SettingsCardItem(
-                        headline = "CSVから単語データをインポート",
-                        icon = painterResource(R.drawable.ic_upload),
+                        headline = "単語データをインポート",
+                        icon = painterResource(R.drawable.ic_download),
                         onClick = {
                             csvPickerLauncher.launch(
                                 arrayOf("text/*", "text/comma-separated-values", "*/*")
@@ -234,8 +234,8 @@ fun SettingsScreen(
                     )
 
                     SettingsCardItem(
-                        headline = "CSVから単語データをエクスポート",
-                        icon = painterResource(R.drawable.ic_download),
+                        headline = "単語データをエクスポート",
+                        icon = painterResource(R.drawable.ic_upload),
                         onClick = {
                             csvExportLauncher.launch("${activeBook.name}.csv")
                         },

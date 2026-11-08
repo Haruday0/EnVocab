@@ -21,7 +21,7 @@ data class VocabItem(
     val id: String = UUID.randomUUID().toString(),
     val bookId: String,
     val no: Int,
-    val part: Int = 1,
+    val part: String = "1",
     val group: String = "",
     val word: String,
     val meaning: String,

@@ -71,7 +71,16 @@ fun ListScreen(
     var itemToDelete by remember { mutableStateOf<VocabItem?>(null) }
 
     val availableParts = remember(items) {
-        items.map { it.part }.distinct().sorted()
+        items.map { it.part }.distinct().sortedWith(Comparator { a, b ->
+            val numA = a.toIntOrNull()
+            val numB = b.toIntOrNull()
+            when {
+                numA != null && numB != null -> numA.compareTo(numB)
+                numA != null -> -1
+                numB != null -> 1
+                else -> a.compareTo(b)
+            }
+        })
     }
     val groupedItemsByPart = remember(items) {
         items.groupBy { it.part }.mapValues { (_, partItems) ->
@@ -160,7 +169,7 @@ fun ListScreen(
                                     },
                                     text = {
                                         Text(
-                                            text = "Part $part",
+                                            text = if (part.all { it.isDigit() }) "Part $part" else part,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
@@ -364,10 +373,10 @@ fun ListScreenPreview() {
                 ListScreen(
                     activeBook = VocabBook(id = "1", name = "Forget 810"),
                     items = listOf(
-                        VocabItem(id = "1", bookId = "1", no = 1, part = 1, group = "名詞", word = "apple", meaning = "[名] りんご"),
-                        VocabItem(id = "2", bookId = "1", no = 2, part = 1, group = "名詞", word = "banana", meaning = "[名] バナナ"),
-                        VocabItem(id = "3", bookId = "1", no = 3, part = 2, group = "動詞", word = "consider", meaning = "[動] 〜をよく考える"),
-                        VocabItem(id = "4", bookId = "1", no = 4, part = 2, group = "動詞", word = "speak", meaning = "[動] 話す")
+                        VocabItem(id = "1", bookId = "1", no = 1, part = "1", group = "名詞", word = "apple", meaning = "[名] りんご"),
+                        VocabItem(id = "2", bookId = "1", no = 2, part = "1", group = "名詞", word = "banana", meaning = "[名] バナナ"),
+                        VocabItem(id = "3", bookId = "1", no = 3, part = "2", group = "動詞", word = "consider", meaning = "[動] 〜をよく考える"),
+                        VocabItem(id = "4", bookId = "1", no = 4, part = "2", group = "動詞", word = "speak", meaning = "[動] 話す")
                     ),
                     onPlayAudio = { _, _ -> },
                     onAddItem = {},

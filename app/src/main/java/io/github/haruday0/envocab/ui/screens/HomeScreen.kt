@@ -26,6 +26,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.StrokeCap
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import androidx.compose.ui.Alignment
@@ -201,7 +202,9 @@ fun HomeScreen(
                             LinearProgressIndicator(
                                 progress = { progress },
                                 modifier = Modifier.fillMaxWidth(),
-                                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.secondaryContainer,
+                                strokeCap = StrokeCap.Round,
                             )
 
                             Spacer(Modifier.height(8.dp))

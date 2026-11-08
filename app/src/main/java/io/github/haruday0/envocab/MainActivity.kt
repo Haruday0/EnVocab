@@ -96,9 +96,9 @@ fun MainApp() {
             if (isPreview) {
                 addAll(
                     listOf(
-                        VocabItem(id = "1", bookId = "preview_1", no = 1, part = 1, group = "名詞", word = "apple", meaning = "[名] りんご", isMastered = false),
-                        VocabItem(id = "2", bookId = "preview_1", no = 2, part = 1, group = "動詞", word = "consider", meaning = "[動] 〜をよく考える", isMastered = true),
-                        VocabItem(id = "3", bookId = "preview_1", no = 3, part = 1, group = "形容詞", word = "crucial", meaning = "[形] 決定的な", isMastered = false)
+                        VocabItem(id = "1", bookId = "preview_1", no = 1, part = "1", group = "名詞", word = "apple", meaning = "[名] りんご", isMastered = false),
+                        VocabItem(id = "2", bookId = "preview_1", no = 2, part = "1", group = "動詞", word = "consider", meaning = "[動] 〜をよく考える", isMastered = true),
+                        VocabItem(id = "3", bookId = "preview_1", no = 3, part = "1", group = "形容詞", word = "crucial", meaning = "[形] 決定的な", isMastered = false)
                     )
                 )
             } else {
