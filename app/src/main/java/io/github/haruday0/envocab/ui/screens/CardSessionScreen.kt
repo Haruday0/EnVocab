@@ -85,6 +85,58 @@ import io.github.haruday0.envocab.ui.components.screenBackgroundColor
 import io.github.haruday0.envocab.ui.theme.EnVocabTheme
 import io.github.haruday0.envocab.ui.theme.ThemePreviews
 
+internal fun computeCardEndNo(startNo: Int, count: Int): Int {
+    return (startNo + count.coerceAtLeast(1) - 1).coerceAtLeast(startNo)
+}
+
+internal fun computeCardStartNo(endNo: Int, count: Int): Int {
+    return (endNo - count.coerceAtLeast(1) + 1).coerceAtLeast(1)
+}
+
+/**
+ * 指定条件に一致するカード学習対象の単語リストを抽出します。
+ */
+internal fun filterCardItems(
+    items: List<VocabItem>,
+    selectedParts: Set<String>,
+    onlyUnmastered: Boolean,
+    startNo: Int? = null,
+    endNo: Int? = null,
+): List<VocabItem> {
+    return items.filter {
+        (it.part in selectedParts) &&
+            (!onlyUnmastered || !it.isMastered) &&
+            (startNo == null || it.no >= startNo) &&
+            (endNo == null || it.no <= endNo)
+    }
+}
+
+/**
+ * カード学習セッション用の出題リストを構築します。
+ */
+internal fun buildCardSessionItems(
+    items: List<VocabItem>,
+    selectedParts: Set<String>,
+    onlyUnmastered: Boolean,
+    startNo: Int,
+    endNo: Int? = null,
+    isShuffle: Boolean,
+    count: Int,
+): List<VocabItem> {
+    val filtered = filterCardItems(
+        items = items,
+        selectedParts = selectedParts,
+        onlyUnmastered = onlyUnmastered,
+        startNo = if (isShuffle) null else startNo,
+        endNo = if (isShuffle) null else endNo,
+    )
+    return if (isShuffle) {
+        filtered.shuffled().take(count)
+    } else {
+        filtered.sortedBy { it.no }
+    }
+}
+
 /**
  * カード学習の設定画面（ボトムナビゲーションバーのあるメインタブ内に配置）
  */
@@ -134,10 +186,50 @@ fun CardSetupScreen(
     }
     var onlyUnmastered by remember { mutableStateOf(savedConfig.onlyUnmastered) }
     var isShuffle by remember { mutableStateOf(savedConfig.isShuffle) }
+    var startNoText by remember { mutableStateOf(savedConfig.startNoText) }
+    var endNoText by remember { mutableStateOf(savedConfig.endNoText) }
+
+    val effectiveCount = if (isCustomCount) {
+        customCountText.toIntOrNull()?.coerceAtLeast(1) ?: 20
+    } else {
+        selectedPreset ?: 20
+    }
+
+    val syncEndNoFromCount = { count: Int ->
+        val start = startNoText.toIntOrNull() ?: 1
+        endNoText = computeCardEndNo(start, count).toString()
+    }
+    val onStartNoChange = { value: String ->
+        if (value.all(Char::isDigit) && value.length <= 5) {
+            startNoText = value
+            value.toIntOrNull()?.let { start ->
+                endNoText = computeCardEndNo(start, effectiveCount).toString()
+            }
+        }
+    }
+    val onEndNoChange = { value: String ->
+        if (value.all(Char::isDigit) && value.length <= 5) {
+            endNoText = value
+            value.toIntOrNull()?.let { end ->
+                startNoText = computeCardStartNo(end, effectiveCount).toString()
+            }
+        }
+    }
 
     // 設定変更時の永続化
-    LaunchedEffect(selectedParts, onlyUnmastered, isShuffle, isCustomCount, selectedPreset, customCountText) {
+    LaunchedEffect(
+        selectedParts,
+        onlyUnmastered,
+        isShuffle,
+        isCustomCount,
+        selectedPreset,
+        customCountText,
+        startNoText,
+        endNoText
+    ) {
         val countStr = if (isCustomCount) customCountText else (selectedPreset?.toString() ?: "20")
+        val safeStart = startNoText.ifBlank { "1" }
+        val fallbackEnd = computeCardEndNo(safeStart.toIntOrNull() ?: 1, effectiveCount).toString()
         DataManager.saveCardConfig(
             context,
             DataManager.CardConfig(
@@ -145,7 +237,9 @@ fun CardSetupScreen(
                 onlyUnmastered = onlyUnmastered,
                 isShuffle = isShuffle,
                 questionCountText = countStr,
-                isCustomCount = isCustomCount
+                isCustomCount = isCustomCount,
+                startNoText = safeStart,
+                endNoText = endNoText.ifBlank { fallbackEnd }
             )
         )
     }
@@ -191,193 +285,294 @@ fun CardSetupScreen(
                 )
             }
         } else {
+            val startNo = startNoText.toIntOrNull() ?: 1
+            val endNo = endNoText.toIntOrNull() ?: (startNo + effectiveCount - 1)
+            val matchingCount = remember(items, selectedParts, onlyUnmastered, startNo, endNo, isShuffle) {
+                filterCardItems(
+                    items = items,
+                    selectedParts = selectedParts,
+                    onlyUnmastered = onlyUnmastered,
+                    startNo = if (isShuffle) null else startNo,
+                    endNo = if (isShuffle) null else endNo,
+                ).size
+            }
+
             Column(
                 modifier = Modifier
                     .padding(top = innerPadding.calculateTopPadding())
                     .fillMaxSize()
                     .imePadding()
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) {
-                        focusManager.clearFocus()
-                    }
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text("出題範囲", style = MaterialTheme.typography.titleMedium)
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() }
+                        ) {
+                            focusManager.clearFocus()
+                        }
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    availableParts.forEach { part ->
-                        val isPartSelected = selectedParts.contains(part)
+                    Text("出題範囲", style = MaterialTheme.typography.titleMedium)
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        availableParts.forEach { part ->
+                            val isPartSelected = selectedParts.contains(part)
+                            FilterChip(
+                                selected = isPartSelected,
+                                onClick = {
+                                    selectedParts = if (isPartSelected) {
+                                        selectedParts - part
+                                    } else {
+                                        selectedParts + part
+                                    }
+                                },
+                                label = { Text(if (part.all { it.isDigit() }) "Part $part" else part) }
+                            )
+                        }
+                    }
+
+                    val rangeInSelectedParts = remember(items, selectedParts) {
+                        val inParts = items.filter { it.part in selectedParts }
+                        val minNo = inParts.minOfOrNull { it.no }
+                        val maxNo = inParts.maxOfOrNull { it.no }
+                        if (minNo != null && maxNo != null) minNo to maxNo else null
+                    }
+
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        SegmentedListItem(
+                            onClick = { onlyUnmastered = !onlyUnmastered },
+                            shapes = ListItemDefaults.segmentedShapes(index = 0, count = 2),
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ListItemDefaults.segmentedColors(
+                                containerColor = cardContainerColor()
+                            ),
+                            supportingContent = { Text("覚えた単語を除外します") },
+                            trailingContent = {
+                                Switch(checked = onlyUnmastered, onCheckedChange = { onlyUnmastered = it })
+                            }
+                        ) {
+                            Text("未習得の単語のみ")
+                        }
+
+                        SegmentedListItem(
+                            onClick = { isShuffle = !isShuffle },
+                            shapes = ListItemDefaults.segmentedShapes(index = 1, count = 2),
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ListItemDefaults.segmentedColors(
+                                containerColor = cardContainerColor()
+                            ),
+                            supportingContent = { Text("ランダムに出題します") },
+                            trailingContent = {
+                                Switch(checked = isShuffle, onCheckedChange = { isShuffle = it })
+                            }
+                        ) {
+                            Text("ランダム出題")
+                        }
+                    }
+
+                    Text("出題数", style = MaterialTheme.typography.titleMedium)
+
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        presetCounts.forEach { count ->
+                            val isSelected = !isCustomCount && selectedPreset == count
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    isCustomCount = false
+                                    selectedPreset = count
+                                    syncEndNoFromCount(count)
+                                    focusManager.clearFocus()
+                                },
+                                label = { Text("${count}問") }
+                            )
+                        }
                         FilterChip(
-                            selected = isPartSelected,
+                            selected = isCustomCount,
                             onClick = {
-                                selectedParts = if (isPartSelected) {
-                                    selectedParts - part
-                                } else {
-                                    selectedParts + part
+                                isCustomCount = true
+                                selectedPreset = null
+                                customCountText.toIntOrNull()?.takeIf { it >= 1 }?.let(syncEndNoFromCount)
+                            },
+                            label = { Text("カスタム") }
+                        )
+                    }
+
+                    if (isCustomCount) {
+                        OutlinedTextField(
+                            value = customCountText,
+                            onValueChange = { value ->
+                                if (value.all(Char::isDigit) && value.length <= 4) {
+                                    customCountText = value
+                                    value.toIntOrNull()?.takeIf { it >= 1 }?.let(syncEndNoFromCount)
                                 }
                             },
-                            label = { Text(if (part.all { it.isDigit() }) "Part $part" else part) }
+                            label = { Text("出題数を入力") },
+                            suffix = {
+                                Text(
+                                    "問",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Number,
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onDone = { focusManager.clearFocus() }
+                            ),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.medium
                         )
+                    }
+
+                    if (!isShuffle) {
+                        Text(
+                            text = "出題番号",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedTextField(
+                                    value = startNoText,
+                                    onValueChange = onStartNoChange,
+                                    label = { Text("最初", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                    placeholder = { Text("1") },
+                                    prefix = {
+                                        Text(
+                                            "No. ",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    },
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Number,
+                                        imeAction = ImeAction.Next
+                                    ),
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f),
+                                    shape = MaterialTheme.shapes.medium
+                                )
+
+                                Text(
+                                    text = "〜",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                OutlinedTextField(
+                                    value = endNoText,
+                                    onValueChange = onEndNoChange,
+                                    label = { Text("最後", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                    placeholder = { Text(effectiveCount.toString()) },
+                                    prefix = {
+                                        Text(
+                                            "No. ",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    },
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Number,
+                                        imeAction = ImeAction.Done
+                                    ),
+                                    keyboardActions = KeyboardActions(
+                                        onDone = { focusManager.clearFocus() }
+                                    ),
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f),
+                                    shape = MaterialTheme.shapes.medium
+                                )
+                            }
+
+                            if (rangeInSelectedParts != null) {
+                                val (minNo, maxNo) = rangeInSelectedParts
+                                Text(
+                                    text = "選択中の範囲: No. $minNo 〜 $maxNo",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(start = 16.dp)
+                                )
+                            }
+                        }
                     }
                 }
 
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+                androidx.compose.material3.Surface(
+                    color = screenBackgroundColor(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    SegmentedListItem(
-                        onClick = { onlyUnmastered = !onlyUnmastered },
-                        shapes = ListItemDefaults.segmentedShapes(index = 0, count = 2),
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ListItemDefaults.segmentedColors(
-                            containerColor = cardContainerColor()
-                        ),
-                        supportingContent = { Text("覚えた単語を除外します") },
-                        trailingContent = {
-                            Switch(checked = onlyUnmastered, onCheckedChange = { onlyUnmastered = it })
-                        }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("未習得の単語のみ")
-                    }
-
-                    SegmentedListItem(
-                        onClick = { isShuffle = !isShuffle },
-                        shapes = ListItemDefaults.segmentedShapes(index = 1, count = 2),
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ListItemDefaults.segmentedColors(
-                            containerColor = cardContainerColor()
-                        ),
-                        supportingContent = { Text("ランダムに出題します") },
-                        trailingContent = {
-                            Switch(checked = isShuffle, onCheckedChange = { isShuffle = it })
-                        }
-                    ) {
-                        Text("ランダム出題")
-                    }
-                }
-
-                Text("出題数", style = MaterialTheme.typography.titleMedium)
-
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    presetCounts.forEach { count ->
-                        val isSelected = !isCustomCount && selectedPreset == count
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = {
-                                isCustomCount = false
-                                selectedPreset = count
-                                focusManager.clearFocus()
-                            },
-                            label = { Text("${count}問") }
-                        )
-                    }
-                    FilterChip(
-                        selected = isCustomCount,
-                        onClick = {
-                            isCustomCount = true
-                            selectedPreset = null
-                        },
-                        label = { Text("カスタム") }
-                    )
-                }
-
-                if (isCustomCount) {
-                    OutlinedTextField(
-                        value = customCountText,
-                        onValueChange = { value ->
-                            if (value.all(Char::isDigit) && value.length <= 4) {
-                                customCountText = value
-                            }
-                        },
-                        label = { Text("出題数を入力") },
-                        suffix = {
+                        if (matchingCount == 0 && items.isNotEmpty()) {
                             Text(
-                                "問",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = "選択した条件に一致する単語がありません",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center
                             )
-                        },
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Number,
-                            imeAction = ImeAction.Done
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onDone = { focusManager.clearFocus() }
-                        ),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.medium
-                    )
-                }
+                        }
 
-                Spacer(Modifier.weight(1f))
+                        Button(
+                            onClick = {
+                                val filtered = buildCardSessionItems(
+                                    items = items,
+                                    selectedParts = selectedParts,
+                                    onlyUnmastered = onlyUnmastered,
+                                    startNo = startNo,
+                                    endNo = endNo,
+                                    isShuffle = isShuffle,
+                                    count = effectiveCount
+                                )
 
-                val matchingCount = remember(items, selectedParts, onlyUnmastered) {
-                    items.count {
-                        (it.part in selectedParts) &&
-                                (!onlyUnmastered || !it.isMastered)
+                                if (filtered.isNotEmpty()) {
+                                    onStartSession(filtered)
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
+                            enabled = matchingCount > 0
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_play_arrow),
+                                contentDescription = null,
+                                modifier = Modifier.size(ButtonDefaults.IconSize),
+                            )
+                            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                            Text(
+                                "学習を開始",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
                     }
-                }
-
-                if (matchingCount == 0 && items.isNotEmpty()) {
-                    Text(
-                        text = "選択した条件に一致する単語がありません",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Center
-                    )
-                }
-
-                Button(
-                    onClick = {
-                        var filtered = items.filter {
-                            (it.part in selectedParts) &&
-                                    (!onlyUnmastered || !it.isMastered)
-                        }
-
-                        if (isShuffle) {
-                            filtered = filtered.shuffled()
-                        }
-
-                        val count = if (isCustomCount) {
-                            customCountText.toIntOrNull()?.coerceAtLeast(1) ?: 20
-                        } else {
-                            selectedPreset ?: 20
-                        }
-                        filtered = filtered.take(count)
-
-                        if (filtered.isNotEmpty()) {
-                            onStartSession(filtered)
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    enabled = matchingCount > 0
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_play_arrow),
-                        contentDescription = null,
-                        modifier = Modifier.size(ButtonDefaults.IconSize),
-                    )
-                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                    Text(
-                        "学習を開始",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
                 }
             }
         }

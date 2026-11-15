@@ -34,6 +34,8 @@ object DataManager {
     private const val KEY_CARD_SHUFFLE = "card_shuffle"
     private const val KEY_CARD_QUESTION_COUNT = "card_question_count"
     private const val KEY_CARD_IS_CUSTOM = "card_is_custom"
+    private const val KEY_CARD_START_NO = "card_start_no"
+    private const val KEY_CARD_END_NO = "card_end_no"
 
     private val gson = Gson()
 
@@ -163,6 +165,8 @@ object DataManager {
         val isShuffle: Boolean = false,
         val questionCountText: String = "20",
         val isCustomCount: Boolean = false,
+        val startNoText: String = "1",
+        val endNoText: String = "20",
     )
 
     fun loadCardConfig(context: Context): CardConfig {
@@ -174,12 +178,18 @@ object DataManager {
                 gson.fromJson<Set<String>>(partsJson, type) ?: emptySet()
             } else emptySet()
 
+            val questionCountText = prefs.getString(KEY_CARD_QUESTION_COUNT, "20") ?: "20"
+            val startNoText = prefs.getString(KEY_CARD_START_NO, "1")?.ifBlank { "1" } ?: "1"
+            val fallbackEndNo = ((startNoText.toIntOrNull() ?: 1) + (questionCountText.toIntOrNull()?.coerceAtLeast(1) ?: 20) - 1).toString()
+
             CardConfig(
                 selectedParts = parts,
                 onlyUnmastered = prefs.getBoolean(KEY_CARD_ONLY_UNMASTERED, false),
                 isShuffle = prefs.getBoolean(KEY_CARD_SHUFFLE, false),
-                questionCountText = prefs.getString(KEY_CARD_QUESTION_COUNT, "20") ?: "20",
+                questionCountText = questionCountText,
                 isCustomCount = prefs.getBoolean(KEY_CARD_IS_CUSTOM, false),
+                startNoText = startNoText,
+                endNoText = prefs.getString(KEY_CARD_END_NO, fallbackEndNo)?.ifBlank { fallbackEndNo } ?: fallbackEndNo,
             )
         }.getOrDefault(CardConfig())
     }
@@ -192,17 +202,28 @@ object DataManager {
                 putBoolean(KEY_CARD_SHUFFLE, config.isShuffle)
                 putString(KEY_CARD_QUESTION_COUNT, config.questionCountText)
                 putBoolean(KEY_CARD_IS_CUSTOM, config.isCustomCount)
+                val safeStart = config.startNoText.ifBlank { "1" }
+                val fallbackEnd = ((safeStart.toIntOrNull() ?: 1) + (config.questionCountText.toIntOrNull()?.coerceAtLeast(1) ?: 20) - 1).toString()
+                putString(KEY_CARD_START_NO, safeStart)
+                putString(KEY_CARD_END_NO, config.endNoText.ifBlank { fallbackEnd })
             }
         }
     }
 
+    data class ImportResult(
+        val addedCount: Int = 0,
+        val updatedCount: Int = 0,
+    ) {
+        val totalProcessed: Int get() = addedCount + updatedCount
+    }
+
     /**
-     * CSV またはプレーンテキストから単語データを解析・インポートします。
+     * CSV またはプレーンテキストを解析して単語リストを生成します。
      */
-    fun importTextData(context: Context, bookId: String, content: String): Int {
+    fun parseTextData(bookId: String, content: String): List<VocabItem> {
         var currentPart = "1"
         var currentGroup = ""
-        val newItems = mutableListOf<VocabItem>()
+        val items = mutableListOf<VocabItem>()
 
         content.lines().forEach { line ->
             val trimmed = line.trim()
@@ -231,7 +252,7 @@ object DataManager {
                     val translation = if (parts.size > 3) parts[3] else ""
                     val note = if (parts.size > 4) parts.subList(4, parts.size).joinToString(", ") else ""
 
-                    newItems.add(
+                    items.add(
                         VocabItem(
                             bookId = bookId,
                             no = no,
@@ -246,15 +267,80 @@ object DataManager {
                 }
             }
         }
+        return items
+    }
 
-        if (newItems.isNotEmpty()) {
-            val allItems = loadItems(context)
-            allItems.removeAll { it.bookId == bookId }
-            allItems.addAll(newItems)
-            saveItems(context, allItems)
+    /**
+     * 既存の単語データと新しい単語データを差分マージします。
+     * 同一単語が存在する場合は既存の id と isMastered（習得済みフラグ）を引き継ぎ、
+     * CSV に含まれていなかった既存の単語も保持します。
+     */
+    fun mergeItems(
+        existingAllItems: List<VocabItem>,
+        newItems: List<VocabItem>,
+        bookId: String
+    ): Pair<List<VocabItem>, ImportResult> {
+        val otherBookItems = existingAllItems.filter { it.bookId != bookId }
+        val existingBookItems = existingAllItems.filter { it.bookId == bookId }.toMutableList()
+
+        val mergedBookItems = mutableListOf<VocabItem>()
+        var addedCount = 0
+        var updatedCount = 0
+
+        for (newItem in newItems) {
+            val cleanWord = newItem.word.trim()
+
+            // 優先度1: 単語スペル一致 かつ 番号一致
+            val exactMatchIndex = existingBookItems.indexOfFirst {
+                it.word.trim().equals(cleanWord, ignoreCase = true) && it.no == newItem.no
+            }
+
+            val matchedIndex = if (exactMatchIndex != -1) {
+                exactMatchIndex
+            } else {
+                // 優先度2: 単語スペル一致
+                existingBookItems.indexOfFirst {
+                    it.word.trim().equals(cleanWord, ignoreCase = true)
+                }
+            }
+
+            if (matchedIndex != -1) {
+                val existing = existingBookItems.removeAt(matchedIndex)
+                mergedBookItems.add(
+                    newItem.copy(
+                        id = existing.id,
+                        isMastered = existing.isMastered
+                    )
+                )
+                updatedCount++
+            } else {
+                mergedBookItems.add(newItem)
+                addedCount++
+            }
         }
 
-        return newItems.size
+        // CSV に含まれていなかった既存の単語も残す
+        mergedBookItems.addAll(existingBookItems)
+
+        val finalItems = otherBookItems + mergedBookItems
+        return Pair(finalItems, ImportResult(addedCount = addedCount, updatedCount = updatedCount))
+    }
+
+    /**
+     * CSV またはプレーンテキストから単語データを差分インポートします。
+     * 既存の習得ステータス (isMastered) や CSV にない既存単語は保持されます。
+     */
+    fun importTextData(context: Context, bookId: String, content: String): ImportResult {
+        val parsedItems = parseTextData(bookId, content)
+        if (parsedItems.isEmpty()) {
+            return ImportResult()
+        }
+
+        val allItems = loadItems(context)
+        val (updatedAllItems, result) = mergeItems(allItems, parsedItems, bookId)
+        saveItems(context, updatedAllItems)
+
+        return result
     }
 
     /**

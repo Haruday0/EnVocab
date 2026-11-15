@@ -135,9 +135,14 @@ fun SettingsScreen(
     ) { uri: Uri? ->
         if (uri != null && activeBook != null) {
             val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: ""
-            val count = DataManager.importTextData(context, activeBook.id, text)
+            val result = DataManager.importTextData(context, activeBook.id, text)
             onItemsImported(DataManager.loadItems(context).filter { it.bookId == activeBook.id })
-            Toast.makeText(context, "${count}語をインポートしました", Toast.LENGTH_SHORT).show()
+            val message = if (result.addedCount > 0 && result.updatedCount > 0) {
+                "${result.totalProcessed}語をインポートしました (新規: ${result.addedCount}, 更新: ${result.updatedCount})"
+            } else {
+                "${result.totalProcessed}語をインポートしました"
+            }
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
     }
 
